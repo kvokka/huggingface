@@ -117,7 +117,7 @@ Dev:
 
 ### Prerequisites
 
-- Python 3.11+
+- Python 3.14+
 - A [Hugging Face account](https://huggingface.co) with a write-access token (for integration tests)
 
 ### Setup

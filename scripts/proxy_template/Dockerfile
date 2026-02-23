@@ -1,4 +1,4 @@
-FROM python:3.11-slim
+FROM python:3.14-slim
 
 RUN pip install --no-cache-dir fastapi==0.131.0 uvicorn==0.41.0 httpx==0.28.1 && \
   useradd -m -u 1000 user
