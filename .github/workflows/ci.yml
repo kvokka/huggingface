@@ -9,7 +9,7 @@ jobs:
   lint:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - uses: actions/setup-python@v5
         with:
@@ -21,7 +21,7 @@ jobs:
           python -m pip install -r requirements.txt -r requirements-dev.txt
 
       - name: Ruff
-        run: ruff check .
+        uses: astral-sh/ruff-action@v3
 
       - name: ty
         run: |
@@ -31,7 +31,7 @@ jobs:
   hadolint:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Hadolint
         uses: hadolint/hadolint-action@v3.1.0
@@ -41,20 +41,15 @@ jobs:
   rumdl:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-
-      - name: Install rumdl
-        run: |
-          curl -fsSL https://github.com/sethdford/rumdl/releases/latest/download/rumdl-x86_64-unknown-linux-gnu.tar.gz \
-            | tar xz -C /usr/local/bin
+      - uses: actions/checkout@v6
 
       - name: rumdl
-        run: rumdl check --no-exclude .
+        uses: rvben/rumdl@v0.1.26@v0
 
   test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - uses: actions/setup-python@v5
         with:
