@@ -1,6 +1,6 @@
 name: Deploy to Hugging Face (Spaces/Models/Datasets)
 description: Sync a local folder to a Hugging Face repo (space/model/dataset) with an optional public proxy Space for private Space APIs.
-author: huggingface-space-action
+author: huggingface-action
 branding:
   icon: upload-cloud
   color: yellow
@@ -82,7 +82,7 @@ runs:
   using: composite
   steps:
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v6
 
     - name: Set up Python
       uses: actions/setup-python@v5

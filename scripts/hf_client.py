@@ -20,7 +20,7 @@ def _sleep_backoff(attempt: int, base_seconds: float = 1.0) -> None:
     time.sleep(base_seconds * (2**attempt))
 
 
-def with_retries(fn: Callable[[], T], *, retries: int = 3) -> T:
+def with_retries[T](fn: Callable[[], T], *, retries: int = 3) -> T:
     last_err: BaseException | None = None
     for attempt in range(retries + 1):
         try:
