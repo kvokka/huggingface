@@ -1,0 +1,14 @@
+[src]
+exclude = ["scripts/proxy_template/*", "tmp/**/*"]
+[analysis]
+allowed-unresolved-imports = [
+  "huggingface_hub",
+  "huggingface_hub.*",
+  "fastapi",
+  "fastapi.*",
+  "httpx",
+  "httpx.*",
+]
+
+[rules]
+unresolved-import = "ignore"

@@ -1,0 +1,149 @@
+name: Integration (Hugging Face)
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  hf:
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - case: space-no-proxy
+            repo_type: space
+            private: "false"
+            create_proxy: "false"
+          - case: private-space-with-proxy
+            repo_type: space
+            private: "true"
+            create_proxy: "true"
+          - case: model
+            repo_type: model
+            private: "false"
+            create_proxy: "false"
+
+    env:
+      HF_TEST_WORKSPACE: ${{ runner.temp }}/hf-space-action-tests
+      HF_TEST_PREFIX: hf-space-action-test-
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt -r requirements-dev.txt
+
+      - name: Verify secret available
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: |
+          if [ -z "${HF_TOKEN}" ]; then
+            echo "::error::Missing secrets.HF_TOKEN (required for integration tests)"
+            exit 1
+          fi
+
+      - name: Prepare workspace
+        run: |
+          mkdir -p "${HF_TEST_WORKSPACE}"
+
+      - name: Create test source folder
+        id: prep
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          CASE: ${{ matrix.case }}
+          REPO_TYPE: ${{ matrix.repo_type }}
+        run: |
+          set -euo pipefail
+          PYTHONPATH=. python - <<'PY'
+          import os
+          from pathlib import Path
+          from huggingface_hub import HfApi
+
+          api = HfApi(token=os.environ["HF_TOKEN"])
+          owner = api.whoami()["name"]
+          case = os.environ["CASE"]
+          prefix = os.environ["HF_TEST_PREFIX"]
+          run_id = os.environ["GITHUB_RUN_ID"]
+          attempt = os.environ["GITHUB_RUN_ATTEMPT"]
+
+          repo_name = f"{prefix}{run_id}-{attempt}-{case}"
+          repo_id = f"{owner}/{repo_name}"
+
+          ws = Path(os.environ["HF_TEST_WORKSPACE"]) / repo_name
+          ws.mkdir(parents=True, exist_ok=True)
+
+          repo_type = os.environ["REPO_TYPE"]
+          if repo_type == "space":
+              (ws / "app.py").write_text(
+                  "import gradio as gr\n\n"
+                  "def hello(name):\n    return f'hello {name}'\n\n"
+                  "demo = gr.Interface(fn=hello, inputs='text', outputs='text')\n\n"
+                  "if __name__ == '__main__':\n    demo.launch()\n",
+                  encoding="utf-8",
+              )
+              (ws / "requirements.txt").write_text("gradio\n", encoding="utf-8")
+          else:
+              (ws / "README.md").write_text(f"# {repo_id}\n", encoding="utf-8")
+              (ws / "artifact.txt").write_text("integration test artifact\n", encoding="utf-8")
+
+          out = Path(os.environ["GITHUB_OUTPUT"])
+          out.write_text(f"repo_id={repo_id}\nsource_dir={ws.as_posix()}\n", encoding="utf-8")
+          PY
+        shell: bash
+
+      - name: Run deploy
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          PYTHONPATH: .
+        run: |
+          set -euo pipefail
+          python -m scripts.deploy \
+            --huggingface-repo "${{ steps.prep.outputs.repo_id }}" \
+            --hf-token "${HF_TOKEN}" \
+            --repo-type "${{ matrix.repo_type }}" \
+            --space-sdk "gradio" \
+            --private "${{ matrix.private }}" \
+            --source-dir "${{ steps.prep.outputs.source_dir }}" \
+            --commit-message "integration: sync" \
+            --create-proxy "${{ matrix.create_proxy }}" \
+            --proxy-space-suffix "-proxy" \
+            --proxy-hf-token "" \
+            --proxy-target-url "" \
+            --proxy-allow-origins "*"
+
+      - name: Record resources for cleanup
+        if: always()
+        env:
+          PYTHONPATH: .
+        run: |
+          set -euo pipefail
+          file="${HF_TEST_WORKSPACE}/resources-${{ matrix.case }}.txt"
+          echo "${{ matrix.repo_type }} ${{ steps.prep.outputs.repo_id }}" > "${file}"
+          if [ "${{ matrix.create_proxy }}" = "true" ]; then
+            owner="${{ steps.prep.outputs.repo_id }}"
+            proxy_repo_id="${owner}-proxy"
+            echo "space ${proxy_repo_id}" >> "${file}"
+          fi
+          echo "resources_file=${file}" >> "${GITHUB_OUTPUT}"
+
+      - name: Cleanup (always)
+        if: always()
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          PYTHONPATH: .
+        run: |
+          set -euo pipefail
+          python -m scripts.cleanup_resources --hf-token "${HF_TOKEN}" --resources-file "${HF_TEST_WORKSPACE}/resources-${{ matrix.case }}.txt"

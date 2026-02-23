@@ -1,0 +1,114 @@
+name: Deploy to Hugging Face (Spaces/Models/Datasets)
+description: Sync a local folder to a Hugging Face repo (space/model/dataset) with an optional public proxy Space for private Space APIs.
+author: huggingface-space-action
+branding:
+  icon: upload-cloud
+  color: yellow
+
+inputs:
+  huggingface_repo:
+    description: "Hugging Face repo id to sync to. Accepts 'owner/name' or just 'name' (will use token owner)."
+    required: false
+    default: same_with_github_repo
+  hf_token:
+    description: "Hugging Face token with write access."
+    required: true
+
+  repo_type:
+    description: "Repo type: space, model, or dataset."
+    required: false
+    default: space
+  space_sdk:
+    description: "If repo_type=space and repo doesn't exist yet, space SDK to create with: gradio|streamlit|static|docker."
+    required: false
+    default: gradio
+  private:
+    description: "If true, create repo as private (only applies on creation)."
+    required: false
+    default: "false"
+
+  source_dir:
+    description: "Local directory to upload to Hugging Face."
+    required: false
+    default: .
+  commit_message:
+    description: "Commit message for the sync commit."
+    required: false
+    default: "sync: deploy from GitHub Actions"
+
+  create_proxy:
+    description: "If true, create/update a public proxy Space that forwards to the (private) target Space API."
+    required: false
+    default: "false"
+  proxy_space_suffix:
+    description: "Suffix appended to the target space name to form the proxy space name."
+    required: false
+    default: "-proxy"
+  proxy_hf_token:
+    description: "Optional token used by the proxy space to call upstream. If empty, falls back to hf_token."
+    required: false
+    default: ""
+  proxy_target_url:
+    description: "Optional upstream URL override for the proxy. If empty, computed from target space repo id."
+    required: false
+    default: ""
+  proxy_allow_origins:
+    description: "CORS allow-origins for the proxy. Use '*' or a comma-separated list of origins."
+    required: false
+    default: "*"
+
+outputs:
+  repo_id:
+    description: "Resolved Hugging Face repo id (owner/name)."
+    value: ${{ steps.deploy.outputs.repo_id }}
+  repo_url:
+    description: "Hugging Face UI URL for the repo."
+    value: ${{ steps.deploy.outputs.repo_url }}
+  space_url:
+    description: "Hugging Face UI URL for the Space (empty for non-space)."
+    value: ${{ steps.deploy.outputs.space_url }}
+
+  proxy_enabled:
+    description: "true/false depending on whether proxy was created."
+    value: ${{ steps.deploy.outputs.proxy_enabled }}
+  proxy_repo_id:
+    description: "Proxy Space repo id (empty if disabled)."
+    value: ${{ steps.deploy.outputs.proxy_repo_id }}
+  proxy_url:
+    description: "Proxy Space URL (empty if disabled)."
+    value: ${{ steps.deploy.outputs.proxy_url }}
+
+runs:
+  using: composite
+  steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: "3.11"
+
+    - name: Install dependencies
+      shell: bash
+      run: |
+        python -m pip install --upgrade pip
+        python -m pip install -r "${GITHUB_ACTION_PATH}/requirements.txt"
+
+    - name: Deploy
+      id: deploy
+      shell: bash
+      run: |
+        PYTHONPATH="${GITHUB_ACTION_PATH}" python -m scripts.deploy \
+          --huggingface-repo "${{ inputs.huggingface_repo }}" \
+          --hf-token "${{ inputs.hf_token }}" \
+          --repo-type "${{ inputs.repo_type }}" \
+          --space-sdk "${{ inputs.space_sdk }}" \
+          --private "${{ inputs.private }}" \
+          --source-dir "${{ inputs.source_dir }}" \
+          --commit-message "${{ inputs.commit_message }}" \
+          --create-proxy "${{ inputs.create_proxy }}" \
+          --proxy-space-suffix "${{ inputs.proxy_space_suffix }}" \
+          --proxy-hf-token "${{ inputs.proxy_hf_token }}" \
+          --proxy-target-url "${{ inputs.proxy_target_url }}" \
+          --proxy-allow-origins "${{ inputs.proxy_allow_origins }}"
