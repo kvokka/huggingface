@@ -21,7 +21,7 @@ jobs:
           python -m pip install -r requirements.txt -r requirements-dev.txt
 
       - name: Ruff
-        run: ruff check .
+        uses: astral-sh/ruff-action@v3
 
       - name: ty
         run: |
@@ -43,13 +43,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install rumdl
-        run: |
-          curl -fsSL https://github.com/sethdford/rumdl/releases/latest/download/rumdl-x86_64-unknown-linux-gnu.tar.gz \
-            | tar xz -C /usr/local/bin
-
       - name: rumdl
-        run: rumdl check --no-exclude .
+        uses: rvben/rumdl-action@v1
 
   test:
     runs-on: ubuntu-latest
