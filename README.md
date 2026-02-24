@@ -1,6 +1,11 @@
 # Deploy to Hugging Face (Spaces/Models/Datasets)
 
-[![Integration (Hugging Face)](/actions/workflows/integration-hf.yml/badge.svg)](/actions/workflows/integration-hf.yml)
+[![Build Status](https://img.shields.io/github/actions/workflow/status/kvokka/huggingface/ci.yml)](https://github.com/kvokka/huggingface/actions)
+[![Integration (Hugging Face)](https://img.shields.io/github/actions/workflow/status/kvokka/huggingface/integration-hf.yml?label=integration)](https://github.com/kvokka/huggingface/actions/workflows/integration-hf.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![GitHub release (latest by date)](https://img.shields.io/github/v/release/kvokka/huggingface)](https://github.com/kvokka/huggingface/releases/latest)
+[![GitHub stars](https://img.shields.io/github/stars/kvokka/huggingface)](https://github.com/kvokka/huggingface/stargazers)
+[![Sponsor](https://img.shields.io/badge/Sponsor-%E2%9D%A4-pink?logo=github-sponsors)](https://github.com/sponsors/kvokka)
 
 This is a **root-level composite GitHub Action** that syncs a local folder to a Hugging Face repo:
 
