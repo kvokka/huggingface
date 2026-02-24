@@ -94,6 +94,17 @@ Example:
 - Prefer a dedicated `proxy_hf_token` over reusing `hf_token`.
 - Never print tokens in logs; this repo’s scripts avoid printing token values.
 
+## Limitations
+
+Please keep in mind the quota of huggingface free API:
+
+```plain
+429 Too Many Requests: you have reached your 'api' rate limit.
+Retry after 188 seconds (977/1000 requests remaining in current 300s window).
+Url: https://huggingface.co/api/repos/create.
+You have exceeded the rate limit for space creation (20 per day). You can retry this action in 1 day.
+```
+
 ## Integration tests + cleanup
 
 This repo includes real Hugging Face integration workflows:
