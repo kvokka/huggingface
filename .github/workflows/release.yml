@@ -21,8 +21,17 @@ jobs:
         with:
           generate_release_notes: true
 
-      - name: Move major tag (v1)
+      - name: Update floating version tags
         run: |
           set -euo pipefail
-          git tag -f v1 "${GITHUB_SHA}"
-          git push origin -f v1
+
+          # Extract version components from the tag (e.g. v0.1.0 → 0.1.0)
+          VERSION="${GITHUB_REF_NAME#v}"
+          MAJOR="${VERSION%%.*}"
+          MINOR="${VERSION#*.}"
+          MINOR="${MINOR%%.*}"
+
+          # Force-move vMAJOR and vMAJOR.MINOR to this commit
+          git tag -f "v${MAJOR}" "${GITHUB_SHA}"
+          git tag -f "v${MAJOR}.${MINOR}" "${GITHUB_SHA}"
+          git push origin -f "v${MAJOR}" "v${MAJOR}.${MINOR}"

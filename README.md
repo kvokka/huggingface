@@ -172,3 +172,31 @@ PYTHONPATH=. python -m scripts.deploy \
 
 1. Go to [huggingface.co/settings/tokens](https://huggingface.co/settings/tokens) and create a **write** token.
 2. In your GitHub repo → **Settings → Secrets and variables → Actions** → **New repository secret** → name it `HF_TOKEN`.
+
+## Releasing
+
+This project follows [semantic versioning](https://semver.org/). Releases are
+created by pushing a semver tag.
+
+```bash
+git tag v0.2.0
+git push origin v0.2.0
+```
+
+The [release workflow](.github/workflows/release.yml) then:
+
+1. Creates a GitHub Release with auto-generated release notes.
+2. Updates floating alias tags so consumers can pin to a major (`v0`) or
+   major.minor (`v0.2`) version:
+
+   | Push tag | Aliases created/moved |
+   |---|---|
+   | `v0.2.0` | `v0.2`, `v0` |
+   | `v1.3.1` | `v1.3`, `v1` |
+
+Consumers reference the action via these aliases:
+
+```yaml
+- uses: kvokka/huggingface@v0   # tracks latest v0.x.x
+- uses: kvokka/huggingface@v0.1 # tracks latest v0.1.x
+```
