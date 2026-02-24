@@ -122,7 +122,7 @@ jobs:
             --source-dir "${{ steps.prep.outputs.source_dir }}" \
             --commit-message "integration: sync" \
             --create-proxy "${{ matrix.create_proxy }}" \
-            --proxy-space-suffix '-proxy' \
+            --proxy-space-suffix='-proxy' \
             --proxy-hf-token "" \
             --proxy-target-url "" \
             --proxy-allow-origins "*"
