@@ -44,7 +44,7 @@ jobs:
       - uses: actions/checkout@v6
 
       - name: rumdl
-        uses: rvben/rumdl@v0.1.26@v0
+        uses: rvben/rumdl@v0
 
   test:
     runs-on: ubuntu-latest
