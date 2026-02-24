@@ -34,7 +34,7 @@ jobs:
       HF_TEST_PREFIX: hf-space-action-test-
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Set test workspace
         run: |
