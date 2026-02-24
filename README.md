@@ -15,8 +15,6 @@ This is a **root-level composite GitHub Action** that syncs a local folder to a 
 
 It also supports an optional (default **OFF**) feature to create a **public proxy Space** that forwards requests to a **private Space API**.
 
-Legacy reference: `tmp/hugging-push/` is historical material only and is **not used at runtime**.
-
 ## Quick start
 
 ```yaml
@@ -32,7 +30,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
-      - uses: ./
+      - uses: kvokka/huggingface@v0
         with:
           hf_token: ${{ secrets.HF_TOKEN }}
           repo_type: space
@@ -78,7 +76,7 @@ This feature is intended for cases where:
 Example:
 
 ```yaml
-- uses: ./
+- uses: kvokka/huggingface@v0
   with:
     hf_token: ${{ secrets.HF_TOKEN }}
     huggingface_repo: "my-username/my-private-space"
