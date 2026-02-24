@@ -40,7 +40,7 @@ jobs:
         run: |
           echo "HF_TEST_WORKSPACE=${{ runner.temp }}/hf-space-action-tests" >> $GITHUB_ENV
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.14"
 
