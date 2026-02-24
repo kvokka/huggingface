@@ -36,19 +36,6 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
-      - name: Set test workspace
-        run: |
-          echo "HF_TEST_WORKSPACE=${{ runner.temp }}/hf-space-action-tests" >> $GITHUB_ENV
-
-      - uses: actions/setup-python@v6
-        with:
-          python-version: "3.14"
-
-      - name: Install
-        run: |
-          python -m pip install --upgrade pip
-          python -m pip install -r requirements.txt -r requirements-dev.txt
-
       - name: Verify secret available
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
@@ -58,95 +45,230 @@ jobs:
             exit 1
           fi
 
-      - name: Prepare workspace
+      # ── PRE-ACTION: resolve IDs and create test fixtures (pure shell, no Python) ──
+
+      - name: Resolve HF owner and repo IDs
+        id: ids
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
-          mkdir -p "${HF_TEST_WORKSPACE}"
+          set -euo pipefail
+          OWNER=$(curl -sf -H "Authorization: Bearer ${HF_TOKEN}" \
+            https://huggingface.co/api/whoami-v2 | jq -r '.name')
+          if [ -z "${OWNER}" ] || [ "${OWNER}" = "null" ]; then
+            echo "::error::Failed to resolve HF token owner"
+            exit 1
+          fi
+          REPO_NAME="${HF_TEST_PREFIX}${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-${{ matrix.case }}"
+          echo "owner=${OWNER}" >> "$GITHUB_OUTPUT"
+          echo "repo_id=${OWNER}/${REPO_NAME}" >> "$GITHUB_OUTPUT"
+          echo "repo_name=${REPO_NAME}" >> "$GITHUB_OUTPUT"
 
       - name: Create test source folder
         id: prep
         env:
-          HF_TOKEN: ${{ secrets.HF_TOKEN }}
-          CASE: ${{ matrix.case }}
           REPO_TYPE: ${{ matrix.repo_type }}
+          REPO_ID: ${{ steps.ids.outputs.repo_id }}
         run: |
           set -euo pipefail
-          PYTHONPATH=. python - <<'PY'
-          import os
-          from pathlib import Path
+          SOURCE_DIR="${{ runner.temp }}/test-source-${{ matrix.case }}"
+          mkdir -p "${SOURCE_DIR}"
+
+          if [ "${REPO_TYPE}" = "space" ]; then
+            cat > "${SOURCE_DIR}/app.py" << 'PYEOF'
+          import gradio as gr
+
+          def hello(name):
+              return f"hello {name}"
+
+          demo = gr.Interface(fn=hello, inputs="text", outputs="text")
+
+          if __name__ == "__main__":
+              demo.launch()
+          PYEOF
+            echo "gradio" > "${SOURCE_DIR}/requirements.txt"
+          else
+            echo "# ${REPO_ID}" > "${SOURCE_DIR}/README.md"
+            echo "integration test artifact" > "${SOURCE_DIR}/artifact.txt"
+          fi
+
+          echo "source_dir=${SOURCE_DIR}" >> "$GITHUB_OUTPUT"
+
+      # ── THE ACTION UNDER TEST ──────────────────────────────────────────────────
+
+      - name: Deploy via action
+        id: deploy
+        uses: ./
+        with:
+          hf_token: ${{ secrets.HF_TOKEN }}
+          huggingface_repo: ${{ steps.ids.outputs.repo_id }}
+          repo_type: ${{ matrix.repo_type }}
+          space_sdk: gradio
+          private: ${{ matrix.private }}
+          source_dir: ${{ steps.prep.outputs.source_dir }}
+          commit_message: "integration: sync"
+          create_proxy: ${{ matrix.create_proxy }}
+          proxy_space_suffix: "-proxy"
+
+      # ── VERIFY ACTION OUTPUTS ──────────────────────────────────────────────────
+
+      - name: Verify action outputs
+        env:
+          EXPECTED_REPO_ID: ${{ steps.ids.outputs.repo_id }}
+          REPO_TYPE: ${{ matrix.repo_type }}
+          CREATE_PROXY: ${{ matrix.create_proxy }}
+          OUTPUT_REPO_ID: ${{ steps.deploy.outputs.repo_id }}
+          OUTPUT_REPO_URL: ${{ steps.deploy.outputs.repo_url }}
+          OUTPUT_SPACE_URL: ${{ steps.deploy.outputs.space_url }}
+          OUTPUT_PROXY_ENABLED: ${{ steps.deploy.outputs.proxy_enabled }}
+          OUTPUT_PROXY_REPO_ID: ${{ steps.deploy.outputs.proxy_repo_id }}
+          OUTPUT_PROXY_URL: ${{ steps.deploy.outputs.proxy_url }}
+        run: |
+          set -euo pipefail
+          echo "── Checking action outputs ──"
+
+          # repo_id must match what we requested
+          if [ "${OUTPUT_REPO_ID}" != "${EXPECTED_REPO_ID}" ]; then
+            echo "::error::repo_id mismatch: got '${OUTPUT_REPO_ID}', expected '${EXPECTED_REPO_ID}'"
+            exit 1
+          fi
+
+          # repo_url must be non-empty
+          if [ -z "${OUTPUT_REPO_URL}" ]; then
+            echo "::error::repo_url is empty"
+            exit 1
+          fi
+
+          # space_url must be set for spaces, empty for non-spaces
+          if [ "${REPO_TYPE}" = "space" ]; then
+            if [ -z "${OUTPUT_SPACE_URL}" ]; then
+              echo "::error::space_url is empty for a space deployment"
+              exit 1
+            fi
+          else
+            if [ -n "${OUTPUT_SPACE_URL}" ]; then
+              echo "::error::space_url should be empty for repo_type=${REPO_TYPE}, got '${OUTPUT_SPACE_URL}'"
+              exit 1
+            fi
+          fi
+
+          # proxy outputs
+          if [ "${CREATE_PROXY}" = "true" ]; then
+            if [ "${OUTPUT_PROXY_ENABLED}" != "true" ]; then
+              echo "::error::proxy_enabled should be 'true', got '${OUTPUT_PROXY_ENABLED}'"
+              exit 1
+            fi
+            if [ -z "${OUTPUT_PROXY_REPO_ID}" ]; then
+              echo "::error::proxy_repo_id is empty"
+              exit 1
+            fi
+            if [ -z "${OUTPUT_PROXY_URL}" ]; then
+              echo "::error::proxy_url is empty"
+              exit 1
+            fi
+          else
+            if [ "${OUTPUT_PROXY_ENABLED}" != "false" ]; then
+              echo "::error::proxy_enabled should be 'false', got '${OUTPUT_PROXY_ENABLED}'"
+              exit 1
+            fi
+          fi
+
+          echo "✓ All action outputs verified"
+
+      # ── VERIFY HF RESOURCES ────────────────────────────────────────────────────
+
+      - name: Verify HF resources exist
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          REPO_ID: ${{ steps.deploy.outputs.repo_id }}
+          REPO_TYPE: ${{ matrix.repo_type }}
+          CREATE_PROXY: ${{ matrix.create_proxy }}
+          PROXY_REPO_ID: ${{ steps.deploy.outputs.proxy_repo_id }}
+        run: |
+          set -euo pipefail
+          python3 << 'PYEOF'
+          import os, sys
+
           from huggingface_hub import HfApi
 
           api = HfApi(token=os.environ["HF_TOKEN"])
-          owner = api.whoami()["name"]
-          case = os.environ["CASE"]
-          prefix = os.environ["HF_TEST_PREFIX"]
-          run_id = os.environ["GITHUB_RUN_ID"]
-          attempt = os.environ["GITHUB_RUN_ATTEMPT"]
-
-          repo_name = f"{prefix}{run_id}-{attempt}-{case}"
-          repo_id = f"{owner}/{repo_name}"
-
-          ws = Path(os.environ["HF_TEST_WORKSPACE"]) / repo_name
-          ws.mkdir(parents=True, exist_ok=True)
-
+          repo_id = os.environ["REPO_ID"]
           repo_type = os.environ["REPO_TYPE"]
+
+          print(f"── Verifying {repo_type} repo: {repo_id} ──")
+
+          # Verify repo exists and list files
+          files = api.list_repo_files(repo_id=repo_id, repo_type=repo_type)
+          print(f"  Files in repo: {sorted(files)}")
+
           if repo_type == "space":
-              (ws / "app.py").write_text(
-                  "import gradio as gr\n\n"
-                  "def hello(name):\n    return f'hello {name}'\n\n"
-                  "demo = gr.Interface(fn=hello, inputs='text', outputs='text')\n\n"
-                  "if __name__ == '__main__':\n    demo.launch()\n",
-                  encoding="utf-8",
-              )
-              (ws / "requirements.txt").write_text("gradio\n", encoding="utf-8")
+              assert "app.py" in files, f"app.py not found in {repo_id}; got {files}"
+              assert "requirements.txt" in files, f"requirements.txt not found in {repo_id}; got {files}"
           else:
-              (ws / "README.md").write_text(f"# {repo_id}\n", encoding="utf-8")
-              (ws / "artifact.txt").write_text("integration test artifact\n", encoding="utf-8")
+              assert "README.md" in files, f"README.md not found in {repo_id}; got {files}"
+              assert "artifact.txt" in files, f"artifact.txt not found in {repo_id}; got {files}"
 
-          out = Path(os.environ["GITHUB_OUTPUT"])
-          out.write_text(f"repo_id={repo_id}\nsource_dir={ws.as_posix()}\n", encoding="utf-8")
-          PY
-        shell: bash
+          print(f"  ✓ {repo_type} repo verified")
 
-      - name: Run deploy
-        env:
-          HF_TOKEN: ${{ secrets.HF_TOKEN }}
-          PYTHONPATH: .
-        run: |
-          set -euo pipefail
-          python -m scripts.deploy \
-            --huggingface-repo "${{ steps.prep.outputs.repo_id }}" \
-            --hf-token "${HF_TOKEN}" \
-            --repo-type "${{ matrix.repo_type }}" \
-            --space-sdk "gradio" \
-            --private "${{ matrix.private }}" \
-            --source-dir "${{ steps.prep.outputs.source_dir }}" \
-            --commit-message "integration: sync" \
-            --create-proxy "${{ matrix.create_proxy }}" \
-            --proxy-space-suffix='-proxy' \
-            --proxy-hf-token "" \
-            --proxy-target-url "" \
-            --proxy-allow-origins "*"
+          # Verify proxy repo if applicable
+          if os.environ["CREATE_PROXY"] == "true":
+              proxy_id = os.environ["PROXY_REPO_ID"]
+              print(f"── Verifying proxy space: {proxy_id} ──")
+              proxy_files = api.list_repo_files(repo_id=proxy_id, repo_type="space")
+              print(f"  Files in proxy: {sorted(proxy_files)}")
+              # Proxy template must contain Dockerfile and main.py
+              assert "Dockerfile" in proxy_files, f"Dockerfile not found in proxy {proxy_id}; got {proxy_files}"
+              assert "main.py" in proxy_files, f"main.py not found in proxy {proxy_id}; got {proxy_files}"
+              print(f"  ✓ Proxy space verified")
 
-      - name: Record resources for cleanup
+          print("✓ All HF resources verified")
+          PYEOF
+
+      # ── CLEANUP (ALWAYS) ───────────────────────────────────────────────────────
+
+      - name: Cleanup
         if: always()
         env:
-          PYTHONPATH: .
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          REPO_ID: ${{ steps.ids.outputs.repo_id }}
+          REPO_TYPE: ${{ matrix.repo_type }}
+          CREATE_PROXY: ${{ matrix.create_proxy }}
+          PROXY_SUFFIX: "-proxy"
         run: |
           set -euo pipefail
-          file="${HF_TEST_WORKSPACE}/resources-${{ matrix.case }}.txt"
-          echo "${{ matrix.repo_type }} ${{ steps.prep.outputs.repo_id }}" > "${file}"
-          if [ "${{ matrix.create_proxy }}" = "true" ]; then
-            owner="${{ steps.prep.outputs.repo_id }}"
-            proxy_repo_id="${owner}-proxy"
-            echo "space ${proxy_repo_id}" >> "${file}"
+
+          # Python + huggingface_hub may not be available if the action
+          # failed before installing deps. Fall back silently — the
+          # scheduled janitor will catch any leaked resources.
+          if ! python3 -c "import huggingface_hub" 2>/dev/null; then
+            echo "huggingface_hub not available — skipping cleanup (janitor will handle)"
+            exit 0
           fi
-          echo "resources_file=${file}" >> "${GITHUB_OUTPUT}"
 
-      - name: Cleanup (always)
-        if: always()
-        env:
-          HF_TOKEN: ${{ secrets.HF_TOKEN }}
-          PYTHONPATH: .
-        run: |
-          set -euo pipefail
-          python -m scripts.cleanup_resources --hf-token "${HF_TOKEN}" --resources-file "${HF_TEST_WORKSPACE}/resources-${{ matrix.case }}.txt"
+          python3 << 'PYEOF'
+          import os
+
+          from huggingface_hub import HfApi
+
+          api = HfApi(token=os.environ["HF_TOKEN"])
+          repo_id = os.environ["REPO_ID"]
+          repo_type = os.environ["REPO_TYPE"]
+          create_proxy = os.environ["CREATE_PROXY"]
+          proxy_suffix = os.environ["PROXY_SUFFIX"]
+
+          def delete_best_effort(rid: str, rtype: str) -> None:
+              try:
+                  api.delete_repo(repo_id=rid, repo_type=rtype)
+                  print(f"  ✓ Deleted {rtype}: {rid}")
+              except Exception as exc:
+                  print(f"  ⚠ Could not delete {rtype} {rid}: {exc}")
+
+          if repo_id:
+              print(f"── Cleaning up {repo_type}: {repo_id} ──")
+              delete_best_effort(repo_id, repo_type)
+
+          if create_proxy == "true" and repo_id:
+              proxy_repo_id = f"{repo_id}{proxy_suffix}"
+              print(f"── Cleaning up proxy space: {proxy_repo_id} ──")
+              delete_best_effort(proxy_repo_id, "space")
+          PYEOF

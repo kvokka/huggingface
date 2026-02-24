@@ -9,7 +9,7 @@ This repository is a GitHub Action that deploys content to Hugging Face reposito
 - **Cleanup invariants**: integration tests must delete created HF resources in `always()` teardown and via a scheduled janitor.
 - **Idempotency**: reruns should not fail just because repos already exist.
 - **Parallel safety**: integration tests must use unique repo names per matrix job.
-- **Env var contract**: integration workflows use `HF_TEST_WORKSPACE` for temp local work.
+- **Action-as-SUT**: integration tests must invoke the action via `uses: ./`, not call scripts directly.
 
 ## Legacy boundary
 

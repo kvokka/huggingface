@@ -100,15 +100,15 @@ runs:
       shell: bash
       run: |
         PYTHONPATH="${GITHUB_ACTION_PATH}" python -m scripts.deploy \
-          --huggingface-repo "${{ inputs.huggingface_repo }}" \
-          --hf-token "${{ inputs.hf_token }}" \
-          --repo-type "${{ inputs.repo_type }}" \
-          --space-sdk "${{ inputs.space_sdk }}" \
-          --private "${{ inputs.private }}" \
-          --source-dir "${{ inputs.source_dir }}" \
-          --commit-message "${{ inputs.commit_message }}" \
-          --create-proxy "${{ inputs.create_proxy }}" \
-          --proxy-space-suffix "${{ inputs.proxy_space_suffix }}" \
-          --proxy-hf-token "${{ inputs.proxy_hf_token }}" \
-          --proxy-target-url "${{ inputs.proxy_target_url }}" \
-          --proxy-allow-origins "${{ inputs.proxy_allow_origins }}"
+          --huggingface-repo="${{ inputs.huggingface_repo }}" \
+          --hf-token="${{ inputs.hf_token }}" \
+          --repo-type="${{ inputs.repo_type }}" \
+          --space-sdk="${{ inputs.space_sdk }}" \
+          --private="${{ inputs.private }}" \
+          --source-dir="${{ inputs.source_dir }}" \
+          --commit-message="${{ inputs.commit_message }}" \
+          --create-proxy="${{ inputs.create_proxy }}" \
+          --proxy-space-suffix="${{ inputs.proxy_space_suffix }}" \
+          --proxy-hf-token="${{ inputs.proxy_hf_token }}" \
+          --proxy-target-url="${{ inputs.proxy_target_url }}" \
+          --proxy-allow-origins="${{ inputs.proxy_allow_origins }}"

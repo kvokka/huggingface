@@ -95,10 +95,8 @@ Example:
 
 This repo includes real Hugging Face integration workflows:
 
-- `.github/workflows/integration-hf.yml` runs a parallel matrix and always tears down created repos.
+- `.github/workflows/integration-hf.yml` invokes the action via `uses: ./`, verifies outputs and deployed resources, and always tears down created repos.
 - `.github/workflows/janitor.yml` is a scheduled cleanup that deletes stale repos whose name starts with `hf-space-action-test-`.
-
-The integration workflows use the environment variable **`HF_TEST_WORKSPACE`** for temporary local work.
 
 ## Dependencies
 
@@ -142,16 +140,14 @@ PYTHONPATH=. pytest            # unit tests
 | Variable | Where | Purpose |
 |---|---|---|
 | `HF_TOKEN` | GitHub repo secret | Hugging Face write token. Used by integration tests, janitor, and the action itself. |
-| `HF_TEST_WORKSPACE` | Set automatically (`runner.temp`) | Temp directory for integration test artifacts. No manual setup needed in CI. |
 | `PROXY_HF_TOKEN` *(optional)* | GitHub repo secret | Dedicated token for proxy upstream calls. Falls back to `HF_TOKEN` if absent. |
 
-To run integration tests locally, export `HF_TOKEN` and `GITHUB_REPOSITORY` before invoking:
+To run the deploy script locally (outside the action), export `HF_TOKEN` and `GITHUB_REPOSITORY`:
 
 ```bash
 export HF_TOKEN="hf_..."
 export GITHUB_REPOSITORY="owner/repo"
 export GITHUB_OUTPUT=$(mktemp)
-export HF_TEST_WORKSPACE=$(mktemp -d)
 PYTHONPATH=. python -m scripts.deploy \
   --huggingface-repo owner/test-space \
   --hf-token "${HF_TOKEN}" \
