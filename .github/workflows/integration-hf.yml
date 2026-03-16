@@ -21,14 +21,33 @@ jobs:
             repo_type: space
             private: "false"
             create_proxy: "false"
+            forwarded_config: "false"
+            space_secrets: ""
+            space_variables: ""
           - case: private-space-with-proxy
             repo_type: space
             private: "true"
             create_proxy: "true"
+            forwarded_config: "false"
+            space_secrets: ""
+            space_variables: ""
+          - case: space-with-forwarded-config
+            repo_type: space
+            private: "false"
+            create_proxy: "false"
+            forwarded_config: "true"
+            space_secrets: |
+              API_TOKEN: "integration-secret-value"
+            space_variables: |
+              APP_ENV: "integration"
+              FEATURE_FLAG: "enabled"
           - case: model
             repo_type: model
             private: "false"
             create_proxy: "false"
+            forwarded_config: "false"
+            space_secrets: ""
+            space_variables: ""
 
     env:
       HF_TEST_PREFIX: hf-space-action-test-
@@ -109,6 +128,8 @@ jobs:
           commit_message: "integration: sync"
           create_proxy: ${{ matrix.create_proxy }}
           proxy_space_suffix: "-proxy"
+          space_secrets: ${{ matrix.space_secrets }}
+          space_variables: ${{ matrix.space_variables }}
 
       # ── VERIFY ACTION OUTPUTS ──────────────────────────────────────────────────
 
@@ -183,6 +204,7 @@ jobs:
           REPO_ID: ${{ steps.deploy.outputs.repo_id }}
           REPO_TYPE: ${{ matrix.repo_type }}
           CREATE_PROXY: ${{ matrix.create_proxy }}
+          FORWARDED_CONFIG: ${{ matrix.forwarded_config }}
           PROXY_REPO_ID: ${{ steps.deploy.outputs.proxy_repo_id }}
         run: |
           set -euo pipefail
@@ -220,6 +242,13 @@ jobs:
               assert "Dockerfile" in proxy_files, f"Dockerfile not found in proxy {proxy_id}; got {proxy_files}"
               assert "main.py" in proxy_files, f"main.py not found in proxy {proxy_id}; got {proxy_files}"
               print(f"  ✓ Proxy space verified")
+
+          if os.environ["FORWARDED_CONFIG"] == "true":
+              variables = api.get_space_variables(repo_id=repo_id)
+              print(f"  Space variables: {sorted(variables)}")
+              assert variables["APP_ENV"].value == "integration", variables
+              assert variables["FEATURE_FLAG"].value == "enabled", variables
+              print("  ✓ Forwarded Space variables verified")
 
           print("✓ All HF resources verified")
           PYEOF

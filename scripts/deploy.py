@@ -4,6 +4,8 @@ import argparse
 import os
 from pathlib import Path
 
+import yaml
+
 from scripts.hf_client import HfClient
 
 
@@ -66,6 +68,30 @@ def compute_default_space_runtime_url(*, repo_id: str) -> str:
     return f"https://{owner}-{name}.hf.space"
 
 
+def parse_string_mapping(value: str, *, field_name: str) -> dict[str, str]:
+    raw = value.strip()
+    if raw == "":
+        return {}
+
+    try:
+        parsed = yaml.safe_load(raw)
+    except yaml.YAMLError as exc:
+        raise ValueError(f"{field_name} must be a valid YAML mapping") from exc
+
+    if not isinstance(parsed, dict):
+        raise ValueError(f"{field_name} must be a YAML mapping")
+
+    normalized: dict[str, str] = {}
+    for key, item_value in parsed.items():
+        if not isinstance(key, str) or key.strip() == "":
+            raise ValueError(f"{field_name} keys must be non-empty strings")
+        if not isinstance(item_value, str):
+            raise ValueError(f"{field_name} values must be strings")
+        normalized[key] = item_value
+
+    return normalized
+
+
 def write_outputs(outputs: dict[str, str]) -> None:
     output_path = os.environ.get("GITHUB_OUTPUT")
     if not output_path:
@@ -91,15 +117,21 @@ def main() -> None:
     parser.add_argument("--proxy-hf-token", default="")
     parser.add_argument("--proxy-target-url", default="")
     parser.add_argument("--proxy-allow-origins", default="*")
+    parser.add_argument("--space-secrets", default="")
+    parser.add_argument("--space-variables", default="")
 
     args = parser.parse_args()
 
     repo_type = normalize_repo_type(args.repo_type)
     private = parse_bool(args.private)
     create_proxy = parse_bool(args.create_proxy)
+    space_secrets = parse_string_mapping(args.space_secrets, field_name="space_secrets")
+    space_variables = parse_string_mapping(args.space_variables, field_name="space_variables")
 
     if create_proxy and repo_type != "space":
         raise ValueError("create_proxy=true requires repo_type=space")
+    if repo_type != "space" and (space_secrets or space_variables):
+        raise ValueError("space_secrets and space_variables require repo_type=space")
 
     github_repo = os.environ.get("GITHUB_REPOSITORY", "")
     if not github_repo:
@@ -126,6 +158,12 @@ def main() -> None:
         private=private,
         space_sdk=space_sdk,
     )
+
+    for key, value in space_variables.items():
+        client.set_space_variable(repo_id=repo_id, key=key, value=value)
+
+    for key, value in space_secrets.items():
+        client.set_space_secret(repo_id=repo_id, key=key, value=value)
 
     client.upload_folder(
         folder_path=source_dir,

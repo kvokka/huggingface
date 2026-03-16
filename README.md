@@ -54,6 +54,8 @@ jobs:
 | `proxy_hf_token` | no | empty | Recommended: a **dedicated** token for proxy upstream calls. Falls back to `hf_token`. |
 | `proxy_target_url` | no | empty | If empty, computed as `https://{owner}-{space}.hf.space`. |
 | `proxy_allow_origins` | no | `*` | `*` or a comma-separated list of allowed origins. |
+| `space_secrets` | no | empty | YAML mapping of secret key/value string pairs to create or update on the target Space. Space-only. |
+| `space_variables` | no | empty | YAML mapping of plain-text setting key/value string pairs to create or update on the target Space. Space-only. |
 
 ## Outputs
 
@@ -87,12 +89,22 @@ Example:
     create_proxy: true
     proxy_hf_token: ${{ secrets.PROXY_HF_TOKEN }}
     proxy_allow_origins: "https://myapp.example"
+
+    space_secrets: |
+      OPENAI_API_KEY: "${{ secrets.OPENAI_API_KEY }}"
+    space_variables: |
+      MODEL_REPO_ID: "my-username/my-model"
+      APP_ENV: "production"
 ```
+
+Each value must be a string.
 
 ### Security guidance
 
 - Prefer a dedicated `proxy_hf_token` over reusing `hf_token`.
 - Never print tokens in logs; this repo’s scripts avoid printing token values.
+- `space_secrets` are write-only on Hugging Face; values cannot be read back after being set.
+- `space_variables` are plain-text settings and should not be used for sensitive data.
 
 ## Limitations
 
@@ -156,12 +168,20 @@ PYTHONPATH=. pytest            # unit tests
 | `HF_TOKEN` | GitHub repo secret | Hugging Face write token. Used by integration tests, janitor, and the action itself. |
 | `PROXY_HF_TOKEN` *(optional)* | GitHub repo secret | Dedicated token for proxy upstream calls. Falls back to `HF_TOKEN` if absent. |
 
-To run the deploy script locally (outside the action), export `HF_TOKEN` and `GITHUB_REPOSITORY`:
+To run the deploy script locally (outside the action), export `HF_TOKEN`, `GITHUB_REPOSITORY`, and the YAML mappings:
 
 ```bash
 export HF_TOKEN="hf_..."
 export GITHUB_REPOSITORY="owner/repo"
 export GITHUB_OUTPUT=$(mktemp)
+export SPACE_SECRETS=$(cat <<'EOF'
+OPENAI_API_KEY: "hf_example"
+EOF
+)
+export SPACE_VARIABLES=$(cat <<'EOF'
+APP_ENV: "local"
+EOF
+)
 PYTHONPATH=. python -m scripts.deploy \
   --huggingface-repo owner/test-space \
   --hf-token "${HF_TOKEN}" \
@@ -174,13 +194,25 @@ PYTHONPATH=. python -m scripts.deploy \
   --proxy-space-suffix -proxy \
   --proxy-hf-token "" \
   --proxy-target-url "" \
-  --proxy-allow-origins "*"
+  --proxy-allow-origins "*" \
+  --space-secrets "${SPACE_SECRETS}" \
+  --space-variables "${SPACE_VARIABLES}"
 ```
 
 ### Creating the `HF_TOKEN` secret
 
 1. Go to [huggingface.co/settings/tokens](https://huggingface.co/settings/tokens) and create a **write** token.
 2. In your GitHub repo → **Settings → Secrets and variables → Actions** → **New repository secret** → name it `HF_TOKEN`.
+
+## Changelog
+
+### v0.2.0
+
+- Add `space_secrets` and `space_variables` inputs for forwarding GitHub Action-provided Hugging Face Space configuration.
+
+### v0.1.0
+
+- Initial release.
 
 ## Releasing
 

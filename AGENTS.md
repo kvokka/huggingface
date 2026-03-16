@@ -10,6 +10,7 @@ This repository is a GitHub Action that deploys content to Hugging Face reposito
 - **Idempotency**: reruns should not fail just because repos already exist.
 - **Parallel safety**: integration tests must use unique repo names per matrix job.
 - **Action-as-SUT**: integration tests must invoke the action via `uses: ./`, not call scripts directly.
+- **README changelog maintenance**: when release-visible behavior changes, update the README changelog and keep prior release entries intact.
 
 ## Legacy boundary
 

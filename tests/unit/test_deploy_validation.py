@@ -7,6 +7,7 @@ from scripts.deploy import (
     compute_repo_id,
     normalize_repo_type,
     parse_bool,
+    parse_string_mapping,
 )
 
 
@@ -84,3 +85,34 @@ def test_compute_proxy_repo_id() -> None:
 
 def test_compute_default_space_runtime_url() -> None:
     assert compute_default_space_runtime_url(repo_id="a/b") == "https://a-b.hf.space"
+
+
+def test_parse_string_mapping_accepts_yaml_mapping() -> None:
+    assert parse_string_mapping('API_KEY: "secret"\nMODE: "prod"', field_name="space_secrets") == {
+        "API_KEY": "secret",
+        "MODE": "prod",
+    }
+
+
+def test_parse_string_mapping_empty_is_empty_mapping() -> None:
+    assert parse_string_mapping("", field_name="space_variables") == {}
+
+
+def test_parse_string_mapping_still_accepts_json_object() -> None:
+    assert parse_string_mapping('{"API_KEY":"secret"}', field_name="space_secrets") == {
+        "API_KEY": "secret"
+    }
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        "[]",
+        "KEY: 1",
+        '": value',
+        "key: [unterminated",
+    ],
+)
+def test_parse_string_mapping_rejects_invalid_values(value: str) -> None:
+    with pytest.raises(ValueError):
+        parse_string_mapping(value, field_name="space_variables")

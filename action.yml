@@ -56,6 +56,14 @@ inputs:
     description: "CORS allow-origins for the proxy. Use '*' or a comma-separated list of origins."
     required: false
     default: "*"
+  space_secrets:
+    description: "Optional YAML mapping of Hugging Face Space secret key/value strings to create/update on the target Space."
+    required: false
+    default: ""
+  space_variables:
+    description: "Optional YAML mapping of Hugging Face Space variable key/value strings to create/update on the target Space."
+    required: false
+    default: ""
 
 outputs:
   repo_id:
@@ -98,6 +106,9 @@ runs:
     - name: Deploy
       id: deploy
       shell: bash
+      env:
+        SPACE_SECRETS_INPUT: ${{ inputs.space_secrets }}
+        SPACE_VARIABLES_INPUT: ${{ inputs.space_variables }}
       run: |
         PYTHONPATH="${GITHUB_ACTION_PATH}" python -m scripts.deploy \
           --huggingface-repo="${{ inputs.huggingface_repo }}" \
@@ -111,4 +122,6 @@ runs:
           --proxy-space-suffix="${{ inputs.proxy_space_suffix }}" \
           --proxy-hf-token="${{ inputs.proxy_hf_token }}" \
           --proxy-target-url="${{ inputs.proxy_target_url }}" \
-          --proxy-allow-origins="${{ inputs.proxy_allow_origins }}"
+          --proxy-allow-origins="${{ inputs.proxy_allow_origins }}" \
+          --space-secrets="${SPACE_SECRETS_INPUT}" \
+          --space-variables="${SPACE_VARIABLES_INPUT}"
