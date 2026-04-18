@@ -51,13 +51,12 @@ jobs:
 
     env:
       HF_TEST_PREFIX: hf-space-action-test-
+      HF_TOKEN: ${{ secrets.HF_TOKEN }}
 
     steps:
       - uses: actions/checkout@v6
 
       - name: Verify secret available
-        env:
-          HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
           if [ -z "${HF_TOKEN}" ]; then
             echo "::error::Missing secrets.HF_TOKEN (required for integration tests)"
@@ -68,8 +67,6 @@ jobs:
 
       - name: Resolve HF owner and repo IDs
         id: ids
-        env:
-          HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
           set -euo pipefail
           OWNER=$(curl -sf -H "Authorization: Bearer ${HF_TOKEN}" \
